@@ -6,9 +6,27 @@ use warnings;
 
 our @ISA = qw();
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 our $NTP_ADJUSTMENT = 2208988800;
 our $IMMEDIATE_FRACTION = '0' x 31 . '1';
+
+use Config;
+
+# initialize functions
+
+BEGIN {
+    # Note: the little endian functions also work on a big endian
+    # platform, but they are less efficient.
+
+    if ($Config{byteorder} eq '1234') {
+        *toFloat = *toFloat_littleEndian;
+        *fromFloat = *fromFloat_littleEndian;
+    } else {
+        *toFloat = *toFloat_bigEndian;
+        *fromFloat = *fromFloat_bigEndian;
+    }
+}
+
 
 =head1 NAME
 
@@ -33,7 +51,8 @@ according to version 1.0 (March 26, 2002) of the specification.
 
 To actually create an OSC client or server, take a look at L<Audio::OSC::Client> and  L<Audio::OSC::Server>. This module only provides several helper functions. Normally, there shouldn't be a need for you to use this module directly.
 
-This is an alpha-quality release. Data structures and interfaces are subject to change.
+Please also see the examples/ directory in this distribution, especially if
+you are not very familiar with references.
 
 =head1 DATA FORMAT
 
@@ -141,7 +160,7 @@ sub _decode_bundle {
     }
     
     while (length($data) > 0) {
-        my $len = unpack('l', $data);
+        my $len = unpack('N', $data);
         substr($data, 0, 4) = '';
         push @$msg, decode(substr($data, 0, $len));
         substr($data, 0, $len) = '';
@@ -175,13 +194,14 @@ sub _decode_message {
         
       SWITCH: for ($_) {
             /i/ && do {
-                push @$msg, unpack('l', $data);
+                push @$msg, unpack('N', $data);
                 # remove this integer from remaining data
                 substr($data, 0, 4) = '';
                 last SWITCH;
             };
             /f/ && do {
-                push @$msg, unpack('f', $data);
+                push @$msg, fromFloat($data);
+#                push @$msg, unpack('f', $data);
                 # remove this float from remaining data
                 substr($data, 0, 4) = '';
                 last SWITCH;
@@ -194,7 +214,7 @@ sub _decode_message {
                 last SWITCH;
             };
             /b/ && do {
-                my $len = unpack('l', $data);
+                my $len = unpack('N', $data);
                 substr($data, 0, 4) = '';            
                 
                 push @$msg, substr($data, 0, $len);
@@ -261,11 +281,26 @@ Returns the binary representation of an integer in OSC format
 =cut
 
 sub toInt {
-    my ($n) = @_;
-    
-    return undef unless defined $n;
-    
-    return pack 'N', $n;
+    return pack('N', $_[0]);
+}
+
+=item fromFloat($n)
+
+Converts the binary representation of a floating point value in OSC format
+into a Perl value. (There are no other "from..." functions since the code
+for that is directly embedded into the decode functons for speed, but this
+one is separate since it depends on the endianness of the system it's
+running on).
+
+=cut
+
+sub fromFloat_bigEndian {
+    return unpack('f', $_[0]);
+}
+
+sub fromFloat_littleEndian {
+    return unpack('f', pack('N', unpack('l', $_[0])));
+#    return unpack('f', reverse $_[0]);
 }
 
 =item toFloat($n)
@@ -274,12 +309,13 @@ Returns the binary representation of a floating point value in OSC format
 
 =cut
 
-sub toFloat {
-    my ($n) = @_;
-    
-    return undef unless defined $n;
-    
-    return pack 'f', $n;
+sub toFloat_bigEndian {
+    return pack('f', $_[0]);
+}
+
+sub toFloat_littleEndian {
+#    return reverse pack('f', $_[0]);
+    return pack('N', unpack('l', pack('f', $_[0])));
 }
 
 =item toString($str)
@@ -361,9 +397,9 @@ sub _bin2frac {
 Doesn't work with Unicode data. Remember to C<use bytes> if you use
 Unicode Strings.
 
-Tests only show that encoding and decoding match, but don't test against OSC spec yet.
-
 =head1 SEE ALSO
+
+Hacking Perl in Nightclubs at L<http://www.perl.com/pub/a/2004/08/31/livecode.html>
 
 The OpenSoundControl website at L<http://www.cnmat.berkeley.edu/OpenSoundControl/>
 
@@ -375,11 +411,13 @@ L<Audio::OSC::Server>
 
 Christian Renz, E<lt>crenz@web42.comE<gt>
 
-Timestamp code by Alex (yaxu.org).
+Timestamp code lifted from Net::NTP.
+
+Test against specification by Alex (yaxu.org).
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2004 by Christian Renz <crenz@web42.com>
+Copyright 2004-2005 by Christian Renz <crenz@web42.com>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 

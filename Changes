@@ -1,7 +1,16 @@
 Revision history for Perl extension Audio::OSC.
 
+0.03  2005-Feb-28
+      Fixed endianness issue in pack()/unpack()-statements
+      (Thanks to alex, Torgeir Strand Henriksen and Peter Mayer)
+      Added tests for to/from functions
+      Added alex' test against the specification
+      Added bundle example
+      Added reference to Perl.com article
+
 0.02  2004-Aug-08
       Added timestamp encoding, courtesy by alex (yaxu.org)
+      (He took it from Net::NTP)
       Added timestamp tests
       Added two more examples
 

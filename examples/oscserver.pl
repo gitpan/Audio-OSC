@@ -13,7 +13,7 @@ sub dumpmsg {
 my $server = Audio::OSC::Server->new(Port => 7777, Handler => \&dumpmsg) or
     die "Could not start server: $@\n";
 
-print "[OSC Client] Receiving messages on port 7777";
+print "[OSC Server] Receiving messages on port 7777\n";
 
 $server->readloop();
 

@@ -1,4 +1,4 @@
-Audio/OSC version 0.02
+Audio/OSC version 0.03
 ======================
 
 This suite of modules provides an OpenSound Control client and 
@@ -9,8 +9,6 @@ server implementation using UDP. According to its authors,
     is optimized for modern networking technology. 
 
     http://www.cnmat.berkeley.edu/OpenSoundControl/
-
-This is an alpha-quality release.
 
 INSTALLATION
 
@@ -23,7 +21,7 @@ To install this module type the following:
 
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2004 Christian Renz <crenz@web42.com>
+Copyright (C) 2004-2005 Christian Renz <crenz@web42.com>
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself. 
