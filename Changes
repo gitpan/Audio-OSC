@@ -1,5 +1,10 @@
 Revision history for Perl extension Audio::OSC.
 
+0.02  2004-Aug-08
+      Added timestamp encoding, courtesy by alex (yaxu.org)
+      Added timestamp tests
+      Added two more examples
+
 0.01  2004-Mar-24
       Original version
 

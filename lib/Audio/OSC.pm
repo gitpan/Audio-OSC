@@ -6,7 +6,9 @@ use warnings;
 
 our @ISA = qw();
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
+our $NTP_ADJUSTMENT = 2208988800;
+our $IMMEDIATE_FRACTION = '0' x 31 . '1';
 
 =head1 NAME
 
@@ -47,12 +49,23 @@ A message is an array reference containing an OSC address followed by zero or mo
 
 =head2 BUNDLES
 
-A bundle is an array reference that contains the bundle identifier C<#bundle> and a timestamp, followed by zero or more messages. Examples:
+A bundle is an array reference that contains the bundle identifier
+C<#bundle> and a timestamp, followed by zero or more
+messages. Examples:
 
-    ['#bundle', 0.1, ['/Pitch', 'f', rand(1)]
+    ['#bundle', time() + 0.1, ['/Pitch', 'f', rand(1)]
 
-    ['#bundle', 0.1, ['/Slider', 'f', $s],
-                     ['/Synth/XY', 'i', $x, 'i', $y]
+    ['#bundle', time() + 2, ['/Slider', 'f', $s],
+                            ['/Synth/XY', 'i', $x, 'i', $y]
+
+Note that the time should be expressed in seconds since 1st January
+1970, which is what time() returns on UNIX systems.  You can pass it
+a floating point time, the Time::HiRes module will help you find the
+current time with sub-second accuracy.
+
+A timestamp with the value "0" carries the special meaning of "execute immediately". Example:
+
+    ['#bundle', 0, ['/Pitch', 'f', rand(1)]
 
 =head1 FUNCTIONS
 
@@ -118,9 +131,14 @@ sub _decode_bundle {
     $data = $2; # discard '#bundle'
     push @$msg, '#bundle';
     
-    my ($ts1, $ts2) = unpack('ll', $data);
+    my ($secs, $frac) = unpack('NB32', $data);
     substr($data, 0, 8) = '';
-    push @$msg, "$ts1.$ts2";
+    if ($secs eq 0 && $frac == $IMMEDIATE_FRACTION) {
+        # 'immediately'
+        push @$msg, 0;
+    } else {
+        push @$msg, $secs - $NTP_ADJUSTMENT + _bin2frac($frac);
+    }
     
     while (length($data) > 0) {
         my $len = unpack('l', $data);
@@ -209,9 +227,9 @@ sub encode {
     my $msg;
     
     if ($data->[0] eq '#bundle') {
-        my $msg = toString($data->[$idx++]) . (chr(0) x 7) . chr(1);
-        
-        $idx++; # time tag currently not implemented
+        my $msg = toString($data->[$idx++]);
+	
+	$msg .= toTimetag($data->[$idx++]);
         
         while ($idx <= $#$data) {
             my $e = encode($data->[$idx++]);
@@ -227,7 +245,6 @@ sub encode {
     # '<' because we need _two_ elements (type tag, data)
     while ($idx < $#$data) {
         my ($t, $d) = ($data->[$idx++], $data->[$idx++]);
-        
         $t eq 'i' && do { $types .= 'i'; $payload .= toInt($d) };
         $t eq 'f' && do { $types .= 'f'; $payload .= toFloat($d) };
         $t eq 's' && do { $types .= 's'; $payload .= toString($d) };
@@ -248,7 +265,7 @@ sub toInt {
     
     return undef unless defined $n;
     
-    return pack 'l', $n;
+    return pack 'N', $n;
 }
 
 =item toFloat($n)
@@ -294,16 +311,57 @@ sub toBlob {
     return toInt(length($d)) . toString($d)
 }
 
+=item toTimetag($d)
+
+Returns the binary representation of a TIMETAG value in OSC format.
+
+=cut
+
+sub toTimetag {
+    my $timetag = shift;
+
+    if ($timetag == 0) {
+        # 'immediately'
+        return(pack("NB32", 0, $IMMEDIATE_FRACTION));
+    } else {
+        my $secs = int($timetag);
+        my $frac = $timetag - $secs;
+
+        return(pack("NB32", $secs + $NTP_ADJUSTMENT, _frac2bin($frac)));
+    }
+}
+
+# NTP conversion code, see e.g. Net::NTP
+sub _frac2bin {
+    my $bin  = '';
+    my $frac = shift;
+    while ( length($bin) < 32 ) {
+        $bin  = $bin . int( $frac * 2 );
+        $frac = ( $frac * 2 ) - ( int( $frac * 2 ) );
+    }
+    return $bin;
+}
+
+sub _bin2frac {
+    my @bin = split '', shift;
+    my $frac = 0;
+    while (@bin) {
+        $frac = ( $frac + pop @bin ) / 2;
+    }
+    return $frac;
+}
+
 1;
 
 =back
+
 
 =head1 BUGS
 
 Doesn't work with Unicode data. Remember to C<use bytes> if you use
 Unicode Strings.
 
-Time tags are currently not encoded.
+Tests only show that encoding and decoding match, but don't test against OSC spec yet.
 
 =head1 SEE ALSO
 
@@ -316,6 +374,8 @@ L<Audio::OSC::Server>
 =head1 AUTHOR
 
 Christian Renz, E<lt>crenz@web42.comE<gt>
+
+Timestamp code by Alex (yaxu.org).
 
 =head1 COPYRIGHT AND LICENSE
 

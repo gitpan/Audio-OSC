@@ -7,5 +7,8 @@ lib/Audio/OSC/Client.pm
 lib/Audio/OSC/Server.pm
 t/1-use.t
 t/2-encode_decode.t
+t/3-bundles_timestamp.t
+examples/oscclient.pl
+examples/oscserver.pl
 examples/reaktor.pl			An example client talking to Reaktor
 META.yml                                Module meta-data (added by MakeMaker)
