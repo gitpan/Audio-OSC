@@ -10,6 +10,8 @@ t/2-tofrom.t
 t/3-encode_decode.t
 t/4-bundles_timestamp.t
 t/5-spec_msgs.t
+t/pod.t
+t/pod-coverage.t
 examples/makebundle.pl
 examples/oscclient.pl
 examples/oscserver.pl

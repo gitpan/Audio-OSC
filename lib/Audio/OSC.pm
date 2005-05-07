@@ -6,8 +6,8 @@ use warnings;
 
 our @ISA = qw();
 
-our $VERSION = '0.03';
-our $NTP_ADJUSTMENT = 2208988800;
+our $VERSION            = '0.04';
+our $NTP_ADJUSTMENT     = 2208988800;
 our $IMMEDIATE_FRACTION = '0' x 31 . '1';
 
 use Config;
@@ -15,18 +15,21 @@ use Config;
 # initialize functions
 
 BEGIN {
+
     # Note: the little endian functions also work on a big endian
     # platform, but they are less efficient.
 
     if ($Config{byteorder} eq '1234') {
-        *toFloat = *toFloat_littleEndian;
-        *fromFloat = *fromFloat_littleEndian;
+        *toFloat   = *_toFloat_littleEndian;
+        *fromFloat = *_fromFloat_littleEndian;
+    } elsif ($Config{byteorder} eq '12345678') {
+        *toFloat   = *_toFloat_64bit;
+        *fromFloat = *_fromFloat_64bit;
     } else {
-        *toFloat = *toFloat_bigEndian;
-        *fromFloat = *fromFloat_bigEndian;
+        *toFloat   = *_toFloat_bigEndian;
+        *fromFloat = *_fromFloat_bigEndian;
     }
 }
-
 
 =head1 NAME
 
@@ -34,9 +37,7 @@ Audio::OSC - OpenSound Control client and server implementation
 
 =head1 SYNOPSIS
 
-  use Audio::OSC;
-  
-  # see below
+See L<AUDIO::OSC::Client> and L<Audio::OSC::Server> for the synopsis.
 
 =head1 DESCRIPTION
 
@@ -44,14 +45,14 @@ Audio::OSC - OpenSound Control client and server implementation
     sound synthesizers, and other multimedia devices that is optimized for
     modern networking technology. 
 
-    L<http://www.cnmat.berkeley.edu/OpenSoundControl/>
+    http://www.cnmat.berkeley.edu/OpenSoundControl
 
 This suite of modules provides an implementation of the protocol in Perl,
 according to version 1.0 (March 26, 2002) of the specification. 
 
 To actually create an OSC client or server, take a look at L<Audio::OSC::Client> and  L<Audio::OSC::Server>. This module only provides several helper functions. Normally, there shouldn't be a need for you to use this module directly.
 
-Please also see the examples/ directory in this distribution, especially if
+Please also see the F<examples/> directory in this distribution, especially if
 you are not very familiar with references.
 
 =head1 DATA FORMAT
@@ -128,8 +129,8 @@ Decodes binary OSC message or bundle data into a Perl data structure
 
 sub decode {
     local $_;
-    my ($data) = @_;    
-    
+    my ($data) = @_;
+
     return undef unless $data;
 
     if ($data =~ /^\#bundle/) {
@@ -142,23 +143,24 @@ sub decode {
 # format: ['#bundle', timestamp, [element1...], [element2...], ...]
 sub _decode_bundle {
     my ($data) = @_;
-    
+
     my $msg = [];
-    
+
     # Get OSC target address
     $data =~ /^($_match_OSCString)(.*)/x || return undef;
-    $data = $2; # discard '#bundle'
+    $data = $2;    # discard '#bundle'
     push @$msg, '#bundle';
-    
+
     my ($secs, $frac) = unpack('NB32', $data);
     substr($data, 0, 8) = '';
     if ($secs eq 0 && $frac == $IMMEDIATE_FRACTION) {
+
         # 'immediately'
         push @$msg, 0;
     } else {
         push @$msg, $secs - $NTP_ADJUSTMENT + _bin2frac($frac);
     }
-    
+
     while (length($data) > 0) {
         my $len = unpack('N', $data);
         substr($data, 0, 4) = '';
@@ -173,35 +175,38 @@ sub _decode_bundle {
 sub _decode_message {
     local $_;
     my ($data) = @_;
-    
+
     my $msg = [];
-    
+
     # Get OSC target address
     $data =~ /^($_match_OSCString)(.*)/x || return undef;
     $data = $2;
 
     (my $addr = $1) =~ s/\0//g;
     push @$msg, $addr;
-        
+
     # Get type string
     $data =~ /^($_match_OSCString)(.*)/x || return undef;
     $data = $2;
     (my $types = $1) =~ s/(^,|\0)//g;
-    
+
     foreach (split //, $types) {
+
         # push type identifier
         push @$msg, $_;
-        
+
       SWITCH: for ($_) {
             /i/ && do {
                 push @$msg, unpack('N', $data);
+
                 # remove this integer from remaining data
                 substr($data, 0, 4) = '';
                 last SWITCH;
             };
             /f/ && do {
                 push @$msg, fromFloat($data);
-#                push @$msg, unpack('f', $data);
+
+                #                push @$msg, unpack('f', $data);
                 # remove this float from remaining data
                 substr($data, 0, 4) = '';
                 last SWITCH;
@@ -215,19 +220,20 @@ sub _decode_message {
             };
             /b/ && do {
                 my $len = unpack('N', $data);
-                substr($data, 0, 4) = '';            
-                
+                substr($data, 0, 4) = '';
+
                 push @$msg, substr($data, 0, $len);
+
                 # blob is zero-padded
                 substr($data, 0, $len + (4 - $len % 4)) = '';
-                
+
                 last SWITCH;
             };
-             
+
             return undef;
         }
     }
-    
+
     return $msg;
 }
 
@@ -241,27 +247,27 @@ sub encode {
     local $_;
     my ($data) = @_;
     my $idx = 0;
-    
+
     return undef unless $data && ref($data);
-    
+
     my $msg;
-    
+
     if ($data->[0] eq '#bundle') {
         my $msg = toString($data->[$idx++]);
-	
-	$msg .= toTimetag($data->[$idx++]);
-        
+
+        $msg .= toTimetag($data->[$idx++]);
+
         while ($idx <= $#$data) {
             my $e = encode($data->[$idx++]);
             $msg .= toInt(length($e)) . $e;
         }
-        
+
         return $msg;
     }
-    
+
     $msg = toString($data->[$idx++]);
     my ($types, $payload) = ('', '');
-    
+
     # '<' because we need _two_ elements (type tag, data)
     while ($idx < $#$data) {
         my ($t, $d) = ($data->[$idx++], $data->[$idx++]);
@@ -270,7 +276,7 @@ sub encode {
         $t eq 's' && do { $types .= 's'; $payload .= toString($d) };
         $t eq 'b' && do { $types .= 'b'; $payload .= toBlob($d) };
     }
-    
+
     return $msg . toString(",$types") . $payload;
 }
 
@@ -294,13 +300,21 @@ running on).
 
 =cut
 
-sub fromFloat_bigEndian {
+sub _fromFloat_bigEndian {
     return unpack('f', $_[0]);
 }
 
-sub fromFloat_littleEndian {
+sub _fromFloat_littleEndian {
     return unpack('f', pack('N', unpack('l', $_[0])));
-#    return unpack('f', reverse $_[0]);
+
+    #    return unpack('f', reverse $_[0]);
+}
+
+sub _fromFloat_64bit {
+    my $t =
+      substr($_[0], 3, 1) . substr($_[0], 2, 1) . substr($_[0], 1, 1) .
+      substr($_[0], 0, 1);
+    return unpack('f', $t);
 }
 
 =item toFloat($n)
@@ -309,13 +323,20 @@ Returns the binary representation of a floating point value in OSC format
 
 =cut
 
-sub toFloat_bigEndian {
-    return pack('f', $_[0]);
+sub _toFloat_bigEndian {
+    return pack("f", $_[0]);
 }
 
-sub toFloat_littleEndian {
-#    return reverse pack('f', $_[0]);
+sub _toFloat_littleEndian {
+
+    #    return reverse pack('f', $_[0]);
     return pack('N', unpack('l', pack('f', $_[0])));
+}
+
+sub _toFloat_64bit {
+    my $t = pack("f", $_[0]);
+    return
+      substr($t, 3, 1) . substr($t, 2, 1) . substr($t, 1, 1) . substr($t, 0, 1);
 }
 
 =item toString($str)
@@ -326,11 +347,11 @@ Returns the binary representation of a string in OSC format
 
 sub toString {
     my ($str) = @_;
-    
+
     return undef unless defined $str;
-    
-    # use bytes for UNICODE compatibility 
-    return $str .  "\0" x (4 - length($str) % 4);
+
+    # use bytes for UNICODE compatibility
+    return $str . "\0" x (4 - length($str) % 4);
 }
 
 =item toBlob($d)
@@ -343,8 +364,8 @@ sub toBlob {
     my ($d) = @_;
 
     return undef unless defined $d;
-    
-    return toInt(length($d)) . toString($d)
+
+    return toInt(length($d)) . toString($d);
 }
 
 =item toTimetag($d)
@@ -357,13 +378,14 @@ sub toTimetag {
     my $timetag = shift;
 
     if ($timetag == 0) {
+
         # 'immediately'
-        return(pack("NB32", 0, $IMMEDIATE_FRACTION));
+        return (pack("NB32", 0, $IMMEDIATE_FRACTION));
     } else {
         my $secs = int($timetag);
         my $frac = $timetag - $secs;
 
-        return(pack("NB32", $secs + $NTP_ADJUSTMENT, _frac2bin($frac)));
+        return (pack("NB32", $secs + $NTP_ADJUSTMENT, _frac2bin($frac)));
     }
 }
 
@@ -371,9 +393,9 @@ sub toTimetag {
 sub _frac2bin {
     my $bin  = '';
     my $frac = shift;
-    while ( length($bin) < 32 ) {
-        $bin  = $bin . int( $frac * 2 );
-        $frac = ( $frac * 2 ) - ( int( $frac * 2 ) );
+    while (length($bin) < 32) {
+        $bin = $bin . int($frac * 2);
+        $frac = ($frac * 2) - (int($frac * 2));
     }
     return $bin;
 }
@@ -382,7 +404,7 @@ sub _bin2frac {
     my @bin = split '', shift;
     my $frac = 0;
     while (@bin) {
-        $frac = ( $frac + pop @bin ) / 2;
+        $frac = ($frac + pop @bin) / 2;
     }
     return $frac;
 }

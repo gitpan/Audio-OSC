@@ -113,6 +113,8 @@ sub send {
 
 1;
 
+=back
+
 =head1 SEE ALSO
 
 The OpenSoundControl website: http://www.cnmat.berkeley.edu/OpenSoundControl/

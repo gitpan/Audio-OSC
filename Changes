@@ -1,5 +1,11 @@
 Revision history for Perl extension Audio::OSC.
 
+0.04  2005-May-07
+      Fixed issues with float encoding on Itanium platform.
+         (needs to be more performant, is kind of ugly so far.)
+      Some fixes in documentation.
+      Added Test::Pod and Test::Pod::Coverage tests.
+
 0.03  2005-Feb-28
       Fixed endianness issue in pack()/unpack()-statements
       (Thanks to alex, Torgeir Strand Henriksen and Peter Mayer)
